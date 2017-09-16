@@ -7,16 +7,24 @@ import (
 )
 
 const (
+	// MemberOf is the memberOf key in an LDAP record
 	MemberOf = "memberOf"
-	CN       = "cn"
+	// CN is the cn key in an LDAP record
+	CN           = "cn"
+	// ErrorNetwork is the code of the error returned when
+	// there's no network connection
+	ErrorNetwork = ldap.ErrorNetwork
 )
 
+// Ldap is the object that handles the connection to an LDAP
+// server
 type Ldap struct {
 	c      *ldap.Conn
 	baseDN string
 	sf     string
 }
 
+// NewLdap creates a new instance of Ldap
 // addr: LDAP server address (IP ":" PortNumber)
 // suff: User account suffix
 // bDN: baseDN
@@ -31,6 +39,8 @@ func NewLdap(addr, suff, bDN string) (l *Ldap, e error) {
 	return
 }
 
+// NewLdapConn creates a new connection to an LDAP server at
+// addr using TLS
 func NewLdapConn(addr string) (c *ldap.Conn, e error) {
 	var cfg *tls.Config
 	cfg = &tls.Config{InsecureSkipVerify: true}
@@ -38,15 +48,19 @@ func NewLdapConn(addr string) (c *ldap.Conn, e error) {
 	return
 }
 
+// Init initializes an Ldap object with previously initialized
+// variables to be its internal fields
 func (l *Ldap) Init(c *ldap.Conn, suff, bDN string) {
 	l.c, l.sf, l.baseDN = c, suff, bDN
 }
 
+// Authenticate authenticates an user u with password p
 func (l *Ldap) Authenticate(u, p string) (e error) {
 	e = l.c.Bind(string(u)+l.sf, p)
 	return
 }
 
+// Membership obtains the current membership of user usr
 func (l *Ldap) Membership(usr string) (m []string, e error) {
 	var mp map[string][]string
 	mp, e = l.FullRecord(usr)
@@ -56,6 +70,7 @@ func (l *Ldap) Membership(usr string) (m []string, e error) {
 	return
 }
 
+// FullName gets the CN of user with sAMAccountName usr
 func (l *Ldap) FullName(usr string) (m string, e error) {
 	var mp map[string][]string
 	mp, e = l.FullRecord(usr)
@@ -75,8 +90,8 @@ func (l *Ldap) FullName(usr string) (m string, e error) {
 	return
 }
 
-// Gets the full record of an user, using its sAMAccountName
-// field.
+// FullRecord Gets the full record of an user, using its
+//  sAMAccountName field.
 func (l *Ldap) FullRecord(usr string) (m map[string][]string,
 	e error) {
 	var n *ldap.Entry
@@ -96,7 +111,7 @@ func (l *Ldap) FullRecord(usr string) (m map[string][]string,
 	return
 }
 
-// Searchs the first result of applying the filter f.
+// SearchOne searchs the first result of applying the filter f
 func (l *Ldap) SearchOne(f string,
 	ats []string) (n *ldap.Entry, e error) {
 	var ns []*ldap.Entry
@@ -111,15 +126,16 @@ func (l *Ldap) SearchOne(f string,
 	return
 }
 
+// SearchFilter searchs all the result passing the filter f
 func (l *Ldap) SearchFilter(f string,
 	ats []string) (n []*ldap.Entry, e error) {
 	var (
-		scope                = ldap.ScopeWholeSubtree
-		deref                = ldap.NeverDerefAliases
-		sizel                = 0
-		timel                = 0
-		tpeol                = false //TypesOnly
-		conts []ldap.Control = nil   //[]Control
+		scope = ldap.ScopeWholeSubtree
+		deref = ldap.NeverDerefAliases
+		sizel = 0
+		timel = 0
+		tpeol = false        //TypesOnly
+		conts []ldap.Control //[]Control
 		s     *ldap.SearchRequest
 		r     *ldap.SearchResult
 	)

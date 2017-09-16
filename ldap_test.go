@@ -1,6 +1,7 @@
 package ldaputil
 
 import (
+	"github.com/go-ldap/ldap"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
@@ -30,13 +31,20 @@ func TestConnect(t *testing.T) {
 	var ld *Ldap
 	var e error
 	ld, e = NewLdap(adAddr, adSuff, adBDN)
-	require.NoError(t, e)
-	e = ld.Authenticate(uprUser, uprPass)
-	require.NoError(t, e)
-	var rec map[string][]string
-	rec, e = ld.FullRecord(uprUser)
-	require.NoError(t, e)
-	for k, v := range rec {
-		t.Logf("%s: %v", k, v)
+	var ec *ldap.Error
+	ec, ok = e.(*ldap.Error)
+	if ok && ec.ResultCode == ldap.ErrorNetwork {
+		t.Log("No network connection")
+	} else {
+		require.NoError(t, e)
+		e = ld.Authenticate(uprUser, uprPass)
+		require.NoError(t, e)
+		var rec map[string][]string
+		rec, e = ld.FullRecord(uprUser)
+		require.NoError(t, e)
+		for k, v := range rec {
+			t.Logf("%s: %v", k, v)
+		}
 	}
+
 }
