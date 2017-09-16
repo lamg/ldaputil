@@ -4,16 +4,27 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/go-ldap/ldap"
+	"github.com/lamg/errors"
 )
 
 const (
 	// MemberOf is the memberOf key in an LDAP record
 	MemberOf = "memberOf"
 	// CN is the cn key in an LDAP record
-	CN           = "cn"
+	CN = "cn"
+)
+
+const (
+	// ErrorAuth is the code for authentication errors
+	ErrorAuth = iota
 	// ErrorNetwork is the code of the error returned when
 	// there's no network connection
-	ErrorNetwork = ldap.ErrorNetwork
+	ErrorNetwork
+	// ErrorMoreThanOne is the code when SearchOne founds
+	// more than one result
+	ErrorMoreThanOne
+	// ErrorSearch is the code for SearchFilter errors
+	ErrorSearch
 )
 
 // Ldap is the object that handles the connection to an LDAP
@@ -29,7 +40,7 @@ type Ldap struct {
 // suff: User account suffix
 // bDN: baseDN
 // admG: Administrators group name
-func NewLdap(addr, suff, bDN string) (l *Ldap, e error) {
+func NewLdap(addr, suff, bDN string) (l *Ldap, e *errors.Error) {
 	l = new(Ldap)
 	var c *ldap.Conn
 	c, e = NewLdapConn(addr)
@@ -41,10 +52,14 @@ func NewLdap(addr, suff, bDN string) (l *Ldap, e error) {
 
 // NewLdapConn creates a new connection to an LDAP server at
 // addr using TLS
-func NewLdapConn(addr string) (c *ldap.Conn, e error) {
+func NewLdapConn(addr string) (c *ldap.Conn, e *errors.Error) {
 	var cfg *tls.Config
 	cfg = &tls.Config{InsecureSkipVerify: true}
-	c, e = ldap.DialTLS("tcp", addr, cfg)
+	var ec error
+	c, ec = ldap.DialTLS("tcp", addr, cfg)
+	if ec != nil {
+		e = &errors.Error{Code: ErrorNetwork, Err: ec}
+	}
 	return
 }
 
@@ -55,8 +70,12 @@ func (l *Ldap) Init(c *ldap.Conn, suff, bDN string) {
 }
 
 // Authenticate authenticates an user u with password p
-func (l *Ldap) Authenticate(u, p string) (e error) {
-	e = l.c.Bind(string(u)+l.sf, p)
+func (l *Ldap) Authenticate(u, p string) (e *errors.Error) {
+	var ec error
+	ec = l.c.Bind(string(u)+l.sf, p)
+	if ec != nil {
+		e = &errors.Error{Code: ErrorAuth, Err: ec}
+	}
 	return
 }
 
@@ -93,7 +112,7 @@ func (l *Ldap) FullName(usr string) (m string, e error) {
 // FullRecord Gets the full record of an user, using its
 //  sAMAccountName field.
 func (l *Ldap) FullRecord(usr string) (m map[string][]string,
-	e error) {
+	e *errors.Error) {
 	var n *ldap.Entry
 	var filter string
 	var atts []string
@@ -113,14 +132,17 @@ func (l *Ldap) FullRecord(usr string) (m map[string][]string,
 
 // SearchOne searchs the first result of applying the filter f
 func (l *Ldap) SearchOne(f string,
-	ats []string) (n *ldap.Entry, e error) {
+	ats []string) (n *ldap.Entry, e *errors.Error) {
 	var ns []*ldap.Entry
 	ns, e = l.SearchFilter(f, ats)
 	if e == nil {
 		if len(ns) == 1 {
 			n = ns[0]
 		} else {
-			e = fmt.Errorf("Result length = %d", len(ns))
+			e = &errors.Error{
+				Code: ErrorMoreThanOne,
+				Err:  fmt.Errorf("Result length = %d", len(ns)),
+			}
 		}
 	}
 	return
@@ -128,7 +150,7 @@ func (l *Ldap) SearchOne(f string,
 
 // SearchFilter searchs all the result passing the filter f
 func (l *Ldap) SearchFilter(f string,
-	ats []string) (n []*ldap.Entry, e error) {
+	ats []string) (n []*ldap.Entry, e *errors.Error) {
 	var (
 		scope = ldap.ScopeWholeSubtree
 		deref = ldap.NeverDerefAliases
@@ -136,15 +158,18 @@ func (l *Ldap) SearchFilter(f string,
 		timel = 0
 		tpeol = false        //TypesOnly
 		conts []ldap.Control //[]Control
-		s     *ldap.SearchRequest
-		r     *ldap.SearchResult
 	)
-	s = ldap.NewSearchRequest(l.baseDN, scope, deref,
+	s := ldap.NewSearchRequest(l.baseDN, scope, deref,
 		sizel, timel, tpeol, f, ats, conts)
-	r, e = l.c.Search(s)
-	if e == nil && len(r.Entries) == 0 {
-		e = fmt.Errorf("Failed search of %s", f)
-	} else if e == nil {
+	r, ec := l.c.Search(s)
+	if ec == nil && len(r.Entries) == 0 || ec != nil {
+		e = &errors.Error{Code: ErrorSearch}
+		if ec == nil {
+			e.Err = fmt.Errorf("Failed search of %s", f)
+		} else {
+			e.Err = ec
+		}
+	} else if ec == nil {
 		n = r.Entries
 	}
 	return

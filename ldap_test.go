@@ -1,7 +1,8 @@
 package ldaputil
 
 import (
-	"github.com/go-ldap/ldap"
+	"fmt"
+	"github.com/lamg/errors"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
@@ -16,7 +17,7 @@ var (
 	uprPass = os.Getenv("UPR_PASS")
 )
 
-func TestConnect(t *testing.T) {
+func initLdapTest() (l *Ldap, e *errors.Error) {
 	var ok bool
 	va := []string{adAddr, adSuff, adBDN, adAdmG, uprUser, uprPass}
 	var i int
@@ -27,17 +28,21 @@ func TestConnect(t *testing.T) {
 			i = i + 1
 		}
 	}
-	require.True(t, ok, "va[%d] = \"\"", i)
-	var ld *Ldap
-	var e error
-	ld, e = NewLdap(adAddr, adSuff, adBDN)
-	var ec *ldap.Error
-	ec, ok = e.(*ldap.Error)
-	if ok && ec.ResultCode == ldap.ErrorNetwork {
-		t.Log("No network connection")
+	if !ok {
+		e = &errors.Error{Code: 0, Err: fmt.Errorf("va[%d] = \"\"", i)}
 	} else {
-		require.NoError(t, e)
-		e = ld.Authenticate(uprUser, uprPass)
+		l, e = NewLdap(adAddr, adSuff, adBDN)
+	}
+	if e == nil {
+		e = l.Authenticate(uprUser, uprPass)
+	}
+	return
+}
+func TestFullRecord(t *testing.T) {
+	ld, e := initLdapTest()
+	if e.Code == ErrorNetwork {
+		t.Log(e.Error())
+	} else {
 		require.NoError(t, e)
 		var rec map[string][]string
 		rec, e = ld.FullRecord(uprUser)
@@ -46,5 +51,4 @@ func TestConnect(t *testing.T) {
 			t.Logf("%s: %v", k, v)
 		}
 	}
-
 }
