@@ -40,15 +40,24 @@ func initLdapTest() (l *Ldap, e *errors.Error) {
 }
 func TestFullRecord(t *testing.T) {
 	ld, e := initLdapTest()
-	if e.Code == ErrorNetwork {
+	if e != nil && e.Code == ErrorNetwork {
 		t.Log(e.Error())
 	} else {
-		require.NoError(t, e)
+		require.True(t, e == nil)
 		var rec map[string][]string
 		rec, e = ld.FullRecord(uprUser)
-		require.NoError(t, e)
+		require.True(t, e == nil)
 		for k, v := range rec {
 			t.Logf("%s: %v", k, v)
 		}
 	}
+}
+
+func TestGetGroup(t *testing.T) {
+	ld, e := initLdapTest()
+	require.True(t, e == nil)
+	var g string
+	g, e = ld.GetGroup(uprUser)
+	require.True(t, e == nil)
+	t.Log(g)
 }

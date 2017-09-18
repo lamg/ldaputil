@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/go-ldap/ldap"
 	"github.com/lamg/errors"
+	"strings"
 )
 
 const (
@@ -12,6 +13,11 @@ const (
 	MemberOf = "memberOf"
 	// CN is the cn key in an LDAP record
 	CN = "cn"
+	// DistinguishedName is the name of the distinguishedName
+	// field
+	DistinguishedName = "distinguishedName"
+	// OU beginning of group specification in AD
+	OU = "OU="
 )
 
 const (
@@ -25,6 +31,8 @@ const (
 	ErrorMoreThanOne
 	// ErrorSearch is the code for SearchFilter errors
 	ErrorSearch
+	//ErrorFormat is the code when a field in AD is malformed
+	ErrorFormat
 )
 
 // Ldap is the object that handles the connection to an LDAP
@@ -90,20 +98,65 @@ func (l *Ldap) Membership(usr string) (m []string, e error) {
 }
 
 // FullName gets the CN of user with sAMAccountName usr
-func (l *Ldap) FullName(usr string) (m string, e error) {
+func (l *Ldap) FullName(usr string) (m string, e *errors.Error) {
 	var mp map[string][]string
 	mp, e = l.FullRecord(usr)
 	if e == nil {
-		var ok bool
-		var s []string
-		s, ok = mp[CN]
+		s, ok := mp[CN]
 		if ok && len(s) == 1 {
 			m = s[0]
 		} else if !ok {
-			e = fmt.Errorf("Full name not found (CN field in AD record)")
-
+			e = &errors.Error{
+				Code: ErrorSearch,
+				Err:  fmt.Errorf("Full name not found (CN field in AD record)"),
+			}
 		} else if len(s) != 1 {
-			e = fmt.Errorf("Full name field length is %d instead of 1", len(s))
+			e = &errors.Error{
+				Code: ErrorSearch,
+				Err:  fmt.Errorf("Full name field length is %d instead of 1", len(s)),
+			}
+		}
+	}
+	return
+}
+
+// GetGroup gets the group specified at distinguishedName field
+// usr: sAMAccountName
+func (l *Ldap) GetGroup(usr string) (g string, e *errors.Error) {
+	var mp map[string][]string
+	mp, e = l.FullRecord(usr)
+	if e == nil {
+		s, ok := mp[DistinguishedName]
+		if !ok {
+			e = &errors.Error{
+				Code: ErrorSearch,
+				Err:  fmt.Errorf("Distinguished name for %s not found", usr),
+			}
+		} else {
+			if len(s) > 0 {
+				sl := strings.Split(s[0], ",")
+				if len(sl) > 1 {
+					oul := sl[1]
+					if strings.HasPrefix(oul, OU) {
+						g = strings.TrimLeft(oul, OU)
+					} else {
+						e = &errors.Error{
+							Code: ErrorFormat,
+							Err:  fmt.Errorf("%v has no string with prefix %s at 1", s, OU),
+						}
+					}
+				} else {
+					e = &errors.Error{
+						Code: ErrorFormat,
+						Err:  fmt.Errorf("Length of %s field should be > 1", DistinguishedName),
+					}
+				}
+			} else {
+				e = &errors.Error{
+					Code: ErrorFormat,
+					Err:  fmt.Errorf("Length of %s should be > 0", DistinguishedName),
+				}
+			}
 		}
 	}
 	return
