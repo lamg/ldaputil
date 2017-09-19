@@ -16,8 +16,10 @@ const (
 	// DistinguishedName is the name of the distinguishedName
 	// field
 	DistinguishedName = "distinguishedName"
-	// OU beginning of group specification in AD
-	OU = "OU="
+	// ou beginning of group specification in AD
+	ouPref = "OU="
+	// cnPref
+	cnPref = "CN="
 )
 
 const (
@@ -87,12 +89,69 @@ func (l *Ldap) Authenticate(u, p string) (e *errors.Error) {
 	return
 }
 
-// Membership obtains the current membership of user usr
-func (l *Ldap) Membership(usr string) (m []string, e error) {
+// MembershipCNs obtains the current membership of user usr
+func (l *Ldap) MembershipCNs(usr string) (m []string,
+	e *errors.Error) {
 	var mp map[string][]string
 	mp, e = l.FullRecord(usr)
+	var ok bool
+	var ms []string
 	if e == nil {
-		m = mp[MemberOf]
+		ms, ok = mp[MemberOf]
+	}
+	if e == nil && !ok {
+		e = &errors.Error{
+			Code: ErrorSearch,
+			Err:  fmt.Errorf("Couldn't get membership of %s", usr),
+		}
+	}
+	if e == nil {
+		m = make([]string, 0)
+		for _, j := range ms {
+			if strings.HasPrefix(j, cnPref) {
+				ns := strings.TrimLeft(j, cnPref)
+				ns = strings.Split(ns, ",")[0]
+				m = append(m, ns)
+			}
+		}
+	}
+	return
+}
+
+// DNFirstGroup returns the distinguishedName's first group
+// (first value with "OU=" as prefix)
+func (l *Ldap) DNFirstGroup(usr string) (d string,
+	e *errors.Error) {
+	var mp map[string][]string
+	mp, e = l.FullRecord(usr)
+	var ok bool
+	var m []string
+	if e == nil {
+		m, ok = mp[DistinguishedName]
+	}
+	if e == nil && !ok {
+		e = &errors.Error{
+			Code: ErrorSearch,
+			Err:  fmt.Errorf("Couldn't get DN of %s", usr),
+		}
+	}
+	if e == nil && len(m) > 0 {
+		i, ms, ok := 0, strings.Split(m[0], ","), false
+		for !ok && i != len(ms) {
+			ok = strings.HasPrefix(ms[i], ouPref)
+			if !ok {
+				i = i + 1
+			}
+		}
+		if ok {
+			d = strings.TrimLeft(ms[i], ouPref)
+		} else {
+			e = &errors.Error{
+				Code: ErrorFormat,
+				Err: fmt.Errorf("%s has no value with prefix %s",
+					DistinguishedName, ouPref),
+			}
+		}
 	}
 	return
 }
@@ -114,48 +173,6 @@ func (l *Ldap) FullName(usr string) (m string, e *errors.Error) {
 			e = &errors.Error{
 				Code: ErrorSearch,
 				Err:  fmt.Errorf("Full name field length is %d instead of 1", len(s)),
-			}
-		}
-	}
-	return
-}
-
-// GetGroup gets the group specified at distinguishedName field
-// usr: sAMAccountName
-func (l *Ldap) GetGroup(usr string) (g string, e *errors.Error) {
-	var mp map[string][]string
-	mp, e = l.FullRecord(usr)
-	if e == nil {
-		s, ok := mp[DistinguishedName]
-		if !ok {
-			e = &errors.Error{
-				Code: ErrorSearch,
-				Err:  fmt.Errorf("Distinguished name for %s not found", usr),
-			}
-		} else {
-			if len(s) > 0 {
-				sl := strings.Split(s[0], ",")
-				if len(sl) > 1 {
-					oul := sl[1]
-					if strings.HasPrefix(oul, OU) {
-						g = strings.TrimLeft(oul, OU)
-					} else {
-						e = &errors.Error{
-							Code: ErrorFormat,
-							Err:  fmt.Errorf("%v has no string with prefix %s at 1", s, OU),
-						}
-					}
-				} else {
-					e = &errors.Error{
-						Code: ErrorFormat,
-						Err:  fmt.Errorf("Length of %s field should be > 1", DistinguishedName),
-					}
-				}
-			} else {
-				e = &errors.Error{
-					Code: ErrorFormat,
-					Err:  fmt.Errorf("Length of %s should be > 0", DistinguishedName),
-				}
 			}
 		}
 	}

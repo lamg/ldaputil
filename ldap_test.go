@@ -53,11 +53,20 @@ func TestFullRecord(t *testing.T) {
 	}
 }
 
-func TestGetGroup(t *testing.T) {
+func TestMembershipCNs(t *testing.T) {
 	ld, e := initLdapTest()
 	require.True(t, e == nil)
-	var g string
-	g, e = ld.GetGroup(uprUser)
+	var m []string
+	m, e = ld.MembershipCNs(uprUser)
+	require.True(t, e == nil && len(m) > 0)
+	t.Logf("%v", m)
+}
+
+func TestDNFirstGroup(t *testing.T) {
+	ld, e := initLdapTest()
 	require.True(t, e == nil)
-	t.Log(g)
+	var d string
+	d, e = ld.DNFirstGroup(uprUser)
+	require.True(t, e == nil && len(d) > 0)
+	t.Log(d)
 }
