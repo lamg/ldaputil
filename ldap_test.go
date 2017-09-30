@@ -31,7 +31,7 @@ func initLdapTest() (l *Ldap, e *errors.Error) {
 	if !ok {
 		e = &errors.Error{Code: 0, Err: fmt.Errorf("va[%d] = \"\"", i)}
 	} else {
-		l, e = NewLdap(adAddr, adSuff, adBDN)
+		l = NewLdap(adAddr, adSuff, adBDN, uprUser, uprPass)
 	}
 	if e == nil {
 		e = l.Authenticate(uprUser, uprPass)

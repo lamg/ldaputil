@@ -40,51 +40,48 @@ const (
 // Ldap is the object that handles the connection to an LDAP
 // server
 type Ldap struct {
-	c      *ldap.Conn
+	addr   string
+	user   string
+	pass   string
 	baseDN string
-	sf     string
+	suff   string
 }
 
 // NewLdap creates a new instance of Ldap
 // addr: LDAP server address (IP ":" PortNumber)
-// suff: User account suffix
+// sf: User account suffix
 // bDN: baseDN
 // admG: Administrators group name
-func NewLdap(addr, suff, bDN string) (l *Ldap, e *errors.Error) {
-	l = new(Ldap)
-	var c *ldap.Conn
-	c, e = NewLdapConn(addr)
-	if e == nil {
-		l.Init(c, suff, bDN)
-	}
+// u: user
+// p: password
+func NewLdap(addr, sf, bDN, u, p string) (l *Ldap) {
+	l = &Ldap{addr: addr, user: u, pass: p, baseDN: bDN, suff: sf}
 	return
 }
 
-// NewLdapConn creates a new connection to an LDAP server at
-// addr using TLS
-func NewLdapConn(addr string) (c *ldap.Conn, e *errors.Error) {
+// newConn creates a new connection to an LDAP server at
+// l.addr using TLS
+func (l *Ldap) newConn() (c *ldap.Conn, e *errors.Error) {
 	var cfg *tls.Config
 	cfg = &tls.Config{InsecureSkipVerify: true}
 	var ec error
-	c, ec = ldap.DialTLS("tcp", addr, cfg)
+	c, ec = ldap.DialTLS("tcp", l.addr, cfg)
 	if ec != nil {
 		e = &errors.Error{Code: ErrorNetwork, Err: ec}
 	}
 	return
 }
 
-// Init initializes an Ldap object with previously initialized
-// variables to be its internal fields
-func (l *Ldap) Init(c *ldap.Conn, suff, bDN string) {
-	l.c, l.sf, l.baseDN = c, suff, bDN
-}
-
 // Authenticate authenticates an user u with password p
 func (l *Ldap) Authenticate(u, p string) (e *errors.Error) {
-	var ec error
-	ec = l.c.Bind(string(u)+l.sf, p)
-	if ec != nil {
-		e = &errors.Error{Code: ErrorAuth, Err: ec}
+	var c *ldap.Conn
+	c, e = l.newConn()
+	if e == nil {
+		ec := c.Bind(string(l.user)+l.suff, l.pass)
+		if ec != nil {
+			e = &errors.Error{Code: ErrorAuth, Err: ec}
+		}
+		c.Close()
 	}
 	return
 }
@@ -231,15 +228,26 @@ func (l *Ldap) SearchFilter(f string,
 	)
 	s := ldap.NewSearchRequest(l.baseDN, scope, deref,
 		sizel, timel, tpeol, f, ats, conts)
-	r, ec := l.c.Search(s)
-	if ec == nil && len(r.Entries) == 0 || ec != nil {
-		e = &errors.Error{Code: ErrorSearch}
-		if ec == nil {
-			e.Err = fmt.Errorf("Failed search of %s", f)
-		} else {
-			e.Err = ec
+	var c *ldap.Conn
+	c, e = l.newConn()
+	var r *ldap.SearchResult
+	if e == nil {
+		var ec error
+		r, ec = c.Search(s)
+		if ec != nil {
+			e = &errors.Error{
+				Code: ErrorSearch,
+				Err:  ec,
+			}
 		}
-	} else if ec == nil {
+		c.Close()
+	}
+	if e == nil && len(r.Entries) == 0 {
+		e = &errors.Error{
+			Code: ErrorSearch,
+			Err:  fmt.Errorf("Failed search of %s", f),
+		}
+	} else if e == nil {
 		n = r.Entries
 	}
 	return
