@@ -33,9 +33,6 @@ func initLdapTest() (l *Ldap, e *errors.Error) {
 	} else {
 		l = NewLdap(adAddr, adSuff, adBDN, uprUser, uprPass)
 	}
-	if e == nil {
-		e = l.Authenticate(uprUser, uprPass)
-	}
 	return
 }
 func TestFullRecord(t *testing.T) {
@@ -58,7 +55,7 @@ func TestMembershipCNs(t *testing.T) {
 	require.True(t, e == nil)
 	var m []string
 	m, e = ld.MembershipCNs(uprUser)
-	require.True(t, e == nil && len(m) > 0)
+	require.True(t, e == nil && len(m) > 0, "m=%d", len(m))
 	t.Logf("%v", m)
 }
 

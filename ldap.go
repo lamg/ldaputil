@@ -73,15 +73,14 @@ func (l *Ldap) newConn() (c *ldap.Conn, e *errors.Error) {
 }
 
 // Authenticate authenticates an user u with password p
-func (l *Ldap) Authenticate(u, p string) (e *errors.Error) {
-	var c *ldap.Conn
+func (l *Ldap) Authenticate(u, p string) (c *ldap.Conn, e *errors.Error) {
 	c, e = l.newConn()
 	if e == nil {
 		ec := c.Bind(string(l.user)+l.suff, l.pass)
 		if ec != nil {
+			c.Close()
 			e = &errors.Error{Code: ErrorAuth, Err: ec}
 		}
-		c.Close()
 	}
 	return
 }
@@ -229,7 +228,7 @@ func (l *Ldap) SearchFilter(f string,
 	s := ldap.NewSearchRequest(l.baseDN, scope, deref,
 		sizel, timel, tpeol, f, ats, conts)
 	var c *ldap.Conn
-	c, e = l.newConn()
+	c, e = l.Authenticate(l.user, l.pass)
 	var r *ldap.SearchResult
 	if e == nil {
 		var ec error
