@@ -19,14 +19,8 @@ func main() {
 	flag.StringVar(&quser, "q", "",
 		"LDAP user name to consult its record")
 	flag.Parse()
-	ld, e := ldaputil.NewLdap(addr, suff, bDN)
-	if e == nil {
-		e = ld.Authenticate(user, pass)
-	}
-	var rec map[string][]string
-	if e == nil {
-		rec, e = ld.FullRecord(quser)
-	}
+	ld := ldaputil.NewLdap(addr, suff, bDN, user, pass)
+	rec, e := ld.FullRecord(quser)
 	if e == nil {
 		for k, v := range rec {
 			fmt.Printf("%s:\n", k)
