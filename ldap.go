@@ -41,8 +41,6 @@ const (
 // server
 type Ldap struct {
 	addr   string
-	user   string
-	pass   string
 	baseDN string
 	suff   string
 }
@@ -51,11 +49,8 @@ type Ldap struct {
 // addr: LDAP server address (IP ":" PortNumber)
 // sf: User account suffix
 // bDN: baseDN
-// admG: Administrators group name
-// u: user
-// p: password
-func NewLdap(addr, sf, bDN, u, p string) (l *Ldap) {
-	l = &Ldap{addr: addr, user: u, pass: p, baseDN: bDN, suff: sf}
+func NewLdap(addr, sf, bDN string) (l *Ldap) {
+	l = &Ldap{addr: addr, baseDN: bDN, suff: sf}
 	return
 }
 
@@ -76,7 +71,7 @@ func (l *Ldap) newConn() (c *ldap.Conn, e *errors.Error) {
 func (l *Ldap) Authenticate(u, p string) (c *ldap.Conn, e *errors.Error) {
 	c, e = l.newConn()
 	if e == nil {
-		ec := c.Bind(string(l.user)+l.suff, l.pass)
+		ec := c.Bind(string(u)+l.suff, p)
 		if ec != nil {
 			c.Close()
 			e = &errors.Error{Code: ErrorAuth, Err: ec}
@@ -86,10 +81,10 @@ func (l *Ldap) Authenticate(u, p string) (c *ldap.Conn, e *errors.Error) {
 }
 
 // MembershipCNs obtains the current membership of user usr
-func (l *Ldap) MembershipCNs(usr string) (m []string,
+func (l *Ldap) MembershipCNs(user, pass, usr string) (m []string,
 	e *errors.Error) {
 	var mp map[string][]string
-	mp, e = l.FullRecord(usr)
+	mp, e = l.FullRecord(user, pass, usr)
 	var ok bool
 	var ms []string
 	if e == nil {
@@ -116,10 +111,10 @@ func (l *Ldap) MembershipCNs(usr string) (m []string,
 
 // DNFirstGroup returns the distinguishedName's first group
 // (first value with "OU=" as prefix)
-func (l *Ldap) DNFirstGroup(usr string) (d string,
+func (l *Ldap) DNFirstGroup(user, pass, usr string) (d string,
 	e *errors.Error) {
 	var mp map[string][]string
-	mp, e = l.FullRecord(usr)
+	mp, e = l.FullRecord(user, pass, usr)
 	var ok bool
 	var m []string
 	if e == nil {
@@ -153,9 +148,9 @@ func (l *Ldap) DNFirstGroup(usr string) (d string,
 }
 
 // FullName gets the CN of user with sAMAccountName usr
-func (l *Ldap) FullName(usr string) (m string, e *errors.Error) {
+func (l *Ldap) FullName(user, pass, usr string) (m string, e *errors.Error) {
 	var mp map[string][]string
-	mp, e = l.FullRecord(usr)
+	mp, e = l.FullRecord(user, pass, usr)
 	if e == nil {
 		s, ok := mp[CN]
 		if ok && len(s) == 1 {
@@ -177,7 +172,7 @@ func (l *Ldap) FullName(usr string) (m string, e *errors.Error) {
 
 // FullRecord Gets the full record of an user, using its
 //  sAMAccountName field.
-func (l *Ldap) FullRecord(usr string) (m map[string][]string,
+func (l *Ldap) FullRecord(user, pass, usr string) (m map[string][]string,
 	e *errors.Error) {
 	var n *ldap.Entry
 	var filter string
@@ -186,7 +181,7 @@ func (l *Ldap) FullRecord(usr string) (m map[string][]string,
 		fmt.Sprintf("(&(objectClass=user)(sAMAccountName=%s))",
 			usr),
 		[]string{}
-	n, e = l.SearchOne(filter, atts)
+	n, e = l.SearchOne(user, pass, filter, atts)
 	if e == nil {
 		m = make(map[string][]string)
 		for _, j := range n.Attributes {
@@ -197,10 +192,10 @@ func (l *Ldap) FullRecord(usr string) (m map[string][]string,
 }
 
 // SearchOne searchs the first result of applying the filter f
-func (l *Ldap) SearchOne(f string,
+func (l *Ldap) SearchOne(user, pass, f string,
 	ats []string) (n *ldap.Entry, e *errors.Error) {
 	var ns []*ldap.Entry
-	ns, e = l.SearchFilter(f, ats)
+	ns, e = l.SearchFilter(user, pass, f, ats)
 	if e == nil {
 		if len(ns) == 1 {
 			n = ns[0]
@@ -215,7 +210,7 @@ func (l *Ldap) SearchOne(f string,
 }
 
 // SearchFilter searchs all the result passing the filter f
-func (l *Ldap) SearchFilter(f string,
+func (l *Ldap) SearchFilter(user, pass, f string,
 	ats []string) (n []*ldap.Entry, e *errors.Error) {
 	var (
 		scope = ldap.ScopeWholeSubtree
@@ -228,7 +223,7 @@ func (l *Ldap) SearchFilter(f string,
 	s := ldap.NewSearchRequest(l.baseDN, scope, deref,
 		sizel, timel, tpeol, f, ats, conts)
 	var c *ldap.Conn
-	c, e = l.Authenticate(l.user, l.pass)
+	c, e = l.Authenticate(user, pass)
 	var r *ldap.SearchResult
 	if e == nil {
 		var ec error
