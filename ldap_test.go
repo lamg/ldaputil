@@ -31,7 +31,7 @@ func initLdapTest() (l *Ldap, e *errors.Error) {
 	if !ok {
 		e = &errors.Error{Code: 0, Err: fmt.Errorf("va[%d] = \"\"", i)}
 	} else {
-		l = NewLdap(adAddr, adSuff, adBDN, uprUser, uprPass)
+		l = NewLdap(adAddr, adSuff, adBDN)
 	}
 	return
 }
@@ -42,7 +42,7 @@ func TestFullRecord(t *testing.T) {
 	} else {
 		require.True(t, e == nil)
 		var rec map[string][]string
-		rec, e = ld.FullRecord(uprUser)
+		rec, e = ld.FullRecord(uprUser, uprPass, uprUser)
 		require.True(t, e == nil)
 		for k, v := range rec {
 			t.Logf("%s: %v", k, v)
@@ -53,8 +53,11 @@ func TestFullRecord(t *testing.T) {
 func TestMembershipCNs(t *testing.T) {
 	ld, e := initLdapTest()
 	require.True(t, e == nil)
+	var mp map[string][]string
+	mp, e = ld.FullRecord(uprUser, uprPass, uprUser)
+	require.True(t, e == nil)
 	var m []string
-	m, e = ld.MembershipCNs(uprUser)
+	m, e = ld.MembershipCNs(mp)
 	require.True(t, e == nil && len(m) > 0, "m=%d", len(m))
 	t.Logf("%v", m)
 }
@@ -62,8 +65,11 @@ func TestMembershipCNs(t *testing.T) {
 func TestDNFirstGroup(t *testing.T) {
 	ld, e := initLdapTest()
 	require.True(t, e == nil)
+	var mp map[string][]string
+	mp, e = ld.FullRecord(uprUser, uprPass, uprUser)
+	require.True(t, e == nil)
 	var d string
-	d, e = ld.DNFirstGroup(uprUser)
+	d, e = ld.DNFirstGroup(mp)
 	require.True(t, e == nil && len(d) > 0)
 	t.Log(d)
 }

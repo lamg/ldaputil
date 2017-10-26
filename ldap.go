@@ -20,6 +20,8 @@ const (
 	ouPref = "OU="
 	// cnPref
 	cnPref = "CN="
+	// SAMAccountName field name
+	SAMAccountName = "sAMAccountName"
 )
 
 const (
@@ -56,7 +58,7 @@ func NewLdap(addr, sf, bDN string) (l *Ldap) {
 
 // newConn creates a new connection to an LDAP server at
 // l.addr using TLS
-func (l *Ldap) newConn() (c *ldap.Conn, e *errors.Error) {
+func (l *Ldap) newConn(u, p string) (c *ldap.Conn, e *errors.Error) {
 	var cfg *tls.Config
 	cfg = &tls.Config{InsecureSkipVerify: true}
 	var ec error
@@ -64,36 +66,34 @@ func (l *Ldap) newConn() (c *ldap.Conn, e *errors.Error) {
 	if ec != nil {
 		e = &errors.Error{Code: ErrorNetwork, Err: ec}
 	}
-	return
-}
-
-// Authenticate authenticates an user u with password p
-func (l *Ldap) Authenticate(u, p string) (c *ldap.Conn, e *errors.Error) {
-	c, e = l.newConn()
 	if e == nil {
 		ec := c.Bind(string(u)+l.suff, p)
 		if ec != nil {
-			c.Close()
 			e = &errors.Error{Code: ErrorAuth, Err: ec}
 		}
 	}
 	return
 }
 
-// MembershipCNs obtains the current membership of user usr
-func (l *Ldap) MembershipCNs(user, pass, usr string) (m []string,
-	e *errors.Error) {
-	var mp map[string][]string
-	mp, e = l.FullRecord(user, pass, usr)
-	var ok bool
-	var ms []string
+// Authenticate authenticates an user u with password p
+func (l *Ldap) Authenticate(u, p string) (e *errors.Error) {
+	var c *ldap.Conn
+	c, e = l.newConn(u, p)
 	if e == nil {
-		ms, ok = mp[MemberOf]
+		c.Close()
 	}
-	if e == nil && !ok {
+	return
+}
+
+// MembershipCNs obtains the current membership of user usr
+func (l *Ldap) MembershipCNs(mp map[string][]string) (m []string,
+	e *errors.Error) {
+	ms, ok := mp[MemberOf]
+	if !ok {
 		e = &errors.Error{
 			Code: ErrorSearch,
-			Err:  fmt.Errorf("Couldn't get membership of %s", usr),
+			Err: fmt.Errorf("Couldn't get membership of %s",
+				mp[SAMAccountName]),
 		}
 	}
 	if e == nil {
@@ -111,19 +111,14 @@ func (l *Ldap) MembershipCNs(user, pass, usr string) (m []string,
 
 // DNFirstGroup returns the distinguishedName's first group
 // (first value with "OU=" as prefix)
-func (l *Ldap) DNFirstGroup(user, pass, usr string) (d string,
+func (l *Ldap) DNFirstGroup(mp map[string][]string) (d string,
 	e *errors.Error) {
-	var mp map[string][]string
-	mp, e = l.FullRecord(user, pass, usr)
-	var ok bool
-	var m []string
-	if e == nil {
-		m, ok = mp[DistinguishedName]
-	}
-	if e == nil && !ok {
+	m, ok := mp[DistinguishedName]
+	if !ok {
 		e = &errors.Error{
 			Code: ErrorSearch,
-			Err:  fmt.Errorf("Couldn't get DN of %s", usr),
+			Err: fmt.Errorf("Couldn't get DN of %s",
+				mp[SAMAccountName]),
 		}
 	}
 	if e == nil && len(m) > 0 {
@@ -148,23 +143,19 @@ func (l *Ldap) DNFirstGroup(user, pass, usr string) (d string,
 }
 
 // FullName gets the CN of user with sAMAccountName usr
-func (l *Ldap) FullName(user, pass, usr string) (m string, e *errors.Error) {
-	var mp map[string][]string
-	mp, e = l.FullRecord(user, pass, usr)
-	if e == nil {
-		s, ok := mp[CN]
-		if ok && len(s) == 1 {
-			m = s[0]
-		} else if !ok {
-			e = &errors.Error{
-				Code: ErrorSearch,
-				Err:  fmt.Errorf("Full name not found (CN field in AD record)"),
-			}
-		} else if len(s) != 1 {
-			e = &errors.Error{
-				Code: ErrorSearch,
-				Err:  fmt.Errorf("Full name field length is %d instead of 1", len(s)),
-			}
+func (l *Ldap) FullName(mp map[string][]string) (m string, e *errors.Error) {
+	s, ok := mp[CN]
+	if ok && len(s) == 1 {
+		m = s[0]
+	} else if !ok {
+		e = &errors.Error{
+			Code: ErrorSearch,
+			Err:  fmt.Errorf("Full name not found (CN field in AD record)"),
+		}
+	} else if len(s) != 1 {
+		e = &errors.Error{
+			Code: ErrorSearch,
+			Err:  fmt.Errorf("Full name field length is %d instead of 1", len(s)),
 		}
 	}
 	return
@@ -223,7 +214,7 @@ func (l *Ldap) SearchFilter(user, pass, f string,
 	s := ldap.NewSearchRequest(l.baseDN, scope, deref,
 		sizel, timel, tpeol, f, ats, conts)
 	var c *ldap.Conn
-	c, e = l.Authenticate(user, pass)
+	c, e = l.newConn(user, pass)
 	var r *ldap.SearchResult
 	if e == nil {
 		var ec error
