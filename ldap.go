@@ -161,6 +161,18 @@ func (l *Ldap) FullName(mp map[string][]string) (m string, e *errors.Error) {
 	return
 }
 
+func (l *Ldap) GetAccountName(mp map[string][]string) (r string,
+	e *errors.Error) {
+	vls, ok := mp[SAMAccountName]
+	if !ok || len(vls) == 0 {
+		e = errors.NewForwardErr(
+			fmt.Errorf("%s not found", SAMAccountName))
+	} else {
+		r = vls[0]
+	}
+	return
+}
+
 // FullRecord Gets the full record of an user, using its
 //  sAMAccountName field.
 func (l *Ldap) FullRecord(user, pass, usr string) (m map[string][]string,

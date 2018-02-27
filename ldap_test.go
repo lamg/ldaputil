@@ -12,14 +12,13 @@ var (
 	adAddr  = os.Getenv("AD")
 	adSuff  = os.Getenv("AD_SUFF")
 	adBDN   = os.Getenv("AD_BDN")
-	adAdmG  = os.Getenv("AD_ADMG")
 	uprUser = os.Getenv("UPR_USER")
 	uprPass = os.Getenv("UPR_PASS")
 )
 
 func initLdapTest() (l *Ldap, e *errors.Error) {
 	var ok bool
-	va := []string{adAddr, adSuff, adBDN, adAdmG, uprUser, uprPass}
+	va := []string{adAddr, adSuff, adBDN, uprUser, uprPass}
 	var i int
 	ok, i = true, 0
 	for ok && i != len(va) {
@@ -72,4 +71,14 @@ func TestDNFirstGroup(t *testing.T) {
 	d, e = ld.DNFirstGroup(mp)
 	require.True(t, e == nil && len(d) > 0)
 	t.Log(d)
+}
+
+func TestGetAccountName(t *testing.T) {
+	ld, e := initLdapTest()
+	require.True(t, e == nil)
+	mp, e := ld.FullRecord(uprUser, uprPass, uprUser)
+	require.True(t, e == nil)
+	usr, e := ld.GetAccountName(mp)
+	require.True(t, e == nil)
+	require.Equal(t, uprUser, usr)
 }
