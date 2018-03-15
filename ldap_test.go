@@ -2,23 +2,22 @@ package ldaputil
 
 import (
 	"fmt"
-	"github.com/lamg/errors"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 )
 
 var (
-	adAddr  = os.Getenv("AD")
-	adSuff  = os.Getenv("AD_SUFF")
-	adBDN   = os.Getenv("AD_BDN")
-	uprUser = os.Getenv("UPR_USER")
-	uprPass = os.Getenv("UPR_PASS")
+	adAddr = os.Getenv("AD")
+	adSuff = os.Getenv("AD_SUFF")
+	adBDN  = os.Getenv("AD_BDN")
+	user   = os.Getenv("USER")
+	pass   = os.Getenv("PASS")
 )
 
-func initLdapTest() (l *Ldap, e *errors.Error) {
+func initLdapTest() (l *Ldap, e error) {
 	var ok bool
-	va := []string{adAddr, adSuff, adBDN, uprUser, uprPass}
+	va := []string{adAddr, adSuff, adBDN, user, pass}
 	var i int
 	ok, i = true, 0
 	for ok && i != len(va) {
@@ -28,57 +27,54 @@ func initLdapTest() (l *Ldap, e *errors.Error) {
 		}
 	}
 	if !ok {
-		e = &errors.Error{Code: 0, Err: fmt.Errorf("va[%d] = \"\"", i)}
+		e = fmt.Errorf("va[%d] = \"\"", i)
 	} else {
 		l = NewLdap(adAddr, adSuff, adBDN)
 	}
 	return
 }
+
 func TestFullRecord(t *testing.T) {
 	ld, e := initLdapTest()
-	if e != nil && e.Code == ErrorNetwork {
-		t.Log(e.Error())
-	} else {
-		require.True(t, e == nil)
-		var rec map[string][]string
-		rec, e = ld.FullRecord(uprUser, uprPass, uprUser)
-		require.True(t, e == nil)
-		for k, v := range rec {
-			t.Logf("%s: %v", k, v)
-		}
+	require.NoError(t, e)
+	var rec map[string][]string
+	rec, e = ld.FullRecord(user, pass, user)
+	require.NoError(t, e)
+	for k, v := range rec {
+		t.Logf("%s: %v", k, v)
 	}
 }
 
 func TestMembershipCNs(t *testing.T) {
 	ld, e := initLdapTest()
-	require.True(t, e == nil)
+	require.NoError(t, e)
 	var mp map[string][]string
-	mp, e = ld.FullRecord(uprUser, uprPass, uprUser)
-	require.True(t, e == nil)
+	mp, e = ld.FullRecord(user, pass, user)
+	require.NoError(t, e)
 	var m []string
 	m, e = ld.MembershipCNs(mp)
-	require.True(t, e == nil && len(m) > 0, "m=%d", len(m))
-	t.Logf("%v", m)
+	require.NoError(t, e)
+	require.True(t, len(m) > 0, "m=%d", len(m))
 }
 
 func TestDNFirstGroup(t *testing.T) {
 	ld, e := initLdapTest()
-	require.True(t, e == nil)
+	require.NoError(t, e)
 	var mp map[string][]string
-	mp, e = ld.FullRecord(uprUser, uprPass, uprUser)
-	require.True(t, e == nil)
+	mp, e = ld.FullRecord(user, pass, user)
+	require.NoError(t, e)
 	var d string
 	d, e = ld.DNFirstGroup(mp)
-	require.True(t, e == nil && len(d) > 0)
-	t.Log(d)
+	require.NoError(t, e)
+	require.True(t, len(d) > 0, "d=%d", d)
 }
 
 func TestGetAccountName(t *testing.T) {
 	ld, e := initLdapTest()
-	require.True(t, e == nil)
-	mp, e := ld.FullRecord(uprUser, uprPass, uprUser)
-	require.True(t, e == nil)
+	require.NoError(t, e)
+	mp, e := ld.FullRecord(user, pass, user)
+	require.NoError(t, e)
 	usr, e := ld.GetAccountName(mp)
-	require.True(t, e == nil)
-	require.Equal(t, uprUser, usr)
+	require.NoError(t, e)
+	require.Equal(t, user, usr)
 }

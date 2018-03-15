@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/go-ldap/ldap"
-	"github.com/lamg/errors"
 	"strings"
 )
 
@@ -22,21 +21,6 @@ const (
 	cnPref = "CN="
 	// SAMAccountName field name
 	SAMAccountName = "sAMAccountName"
-)
-
-const (
-	// ErrorAuth is the code for authentication errors
-	ErrorAuth = iota
-	// ErrorNetwork is the code of the error returned when
-	// there's no network connection
-	ErrorNetwork
-	// ErrorMoreThanOne is the code when SearchOne founds
-	// more than one result
-	ErrorMoreThanOne
-	// ErrorSearch is the code for SearchFilter errors
-	ErrorSearch
-	//ErrorFormat is the code when a field in AD is malformed
-	ErrorFormat
 )
 
 // Ldap is the object that handles the connection to an LDAP
@@ -58,25 +42,18 @@ func NewLdap(addr, sf, bDN string) (l *Ldap) {
 
 // newConn creates a new connection to an LDAP server at
 // l.addr using TLS
-func (l *Ldap) newConn(u, p string) (c *ldap.Conn, e *errors.Error) {
+func (l *Ldap) newConn(u, p string) (c *ldap.Conn, e error) {
 	var cfg *tls.Config
 	cfg = &tls.Config{InsecureSkipVerify: true}
-	var ec error
-	c, ec = ldap.DialTLS("tcp", l.addr, cfg)
-	if ec != nil {
-		e = &errors.Error{Code: ErrorNetwork, Err: ec}
-	}
+	c, e = ldap.DialTLS("tcp", l.addr, cfg)
 	if e == nil {
-		ec := c.Bind(string(u)+l.suff, p)
-		if ec != nil {
-			e = &errors.Error{Code: ErrorAuth, Err: ec}
-		}
+		e = c.Bind(string(u)+l.suff, p)
 	}
 	return
 }
 
 // Authenticate authenticates an user u with password p
-func (l *Ldap) Authenticate(u, p string) (e *errors.Error) {
+func (l *Ldap) Authenticate(u, p string) (e error) {
 	var c *ldap.Conn
 	c, e = l.newConn(u, p)
 	if e == nil {
@@ -87,14 +64,11 @@ func (l *Ldap) Authenticate(u, p string) (e *errors.Error) {
 
 // MembershipCNs obtains the current membership of user usr
 func (l *Ldap) MembershipCNs(mp map[string][]string) (m []string,
-	e *errors.Error) {
+	e error) {
 	ms, ok := mp[MemberOf]
 	if !ok {
-		e = &errors.Error{
-			Code: ErrorSearch,
-			Err: fmt.Errorf("Couldn't get membership of %s",
-				mp[SAMAccountName]),
-		}
+		e = fmt.Errorf("Couldn't get membership of %s",
+			mp[SAMAccountName])
 	}
 	if e == nil {
 		m = make([]string, 0)
@@ -112,14 +86,11 @@ func (l *Ldap) MembershipCNs(mp map[string][]string) (m []string,
 // DNFirstGroup returns the distinguishedName's first group
 // (first value with "OU=" as prefix)
 func (l *Ldap) DNFirstGroup(mp map[string][]string) (d string,
-	e *errors.Error) {
+	e error) {
 	m, ok := mp[DistinguishedName]
 	if !ok {
-		e = &errors.Error{
-			Code: ErrorSearch,
-			Err: fmt.Errorf("Couldn't get DN of %s",
-				mp[SAMAccountName]),
-		}
+		e = fmt.Errorf("Couldn't get DN of %s",
+			mp[SAMAccountName])
 	}
 	if e == nil && len(m) > 0 {
 		i, ms, ok := 0, strings.Split(m[0], ","), false
@@ -132,41 +103,33 @@ func (l *Ldap) DNFirstGroup(mp map[string][]string) (d string,
 		if ok {
 			d = strings.TrimLeft(ms[i], ouPref)
 		} else {
-			e = &errors.Error{
-				Code: ErrorFormat,
-				Err: fmt.Errorf("%s has no value with prefix %s",
-					DistinguishedName, ouPref),
-			}
+			e = fmt.Errorf("%s has no value with prefix %s",
+				DistinguishedName, ouPref)
 		}
 	}
 	return
 }
 
 // FullName gets the CN of user with sAMAccountName usr
-func (l *Ldap) FullName(mp map[string][]string) (m string, e *errors.Error) {
+func (l *Ldap) FullName(mp map[string][]string) (m string,
+	e error) {
 	s, ok := mp[CN]
 	if ok && len(s) == 1 {
 		m = s[0]
 	} else if !ok {
-		e = &errors.Error{
-			Code: ErrorSearch,
-			Err:  fmt.Errorf("Full name not found (CN field in AD record)"),
-		}
+		e = fmt.Errorf("Full name not found (CN field in AD record)")
 	} else if len(s) != 1 {
-		e = &errors.Error{
-			Code: ErrorSearch,
-			Err:  fmt.Errorf("Full name field length is %d instead of 1", len(s)),
-		}
+		e = fmt.Errorf("Full name field length is %d instead of 1",
+			len(s))
 	}
 	return
 }
 
 func (l *Ldap) GetAccountName(mp map[string][]string) (r string,
-	e *errors.Error) {
+	e error) {
 	vls, ok := mp[SAMAccountName]
 	if !ok || len(vls) == 0 {
-		e = errors.NewForwardErr(
-			fmt.Errorf("%s not found", SAMAccountName))
+		e = fmt.Errorf("%s not found", SAMAccountName)
 	} else {
 		r = vls[0]
 	}
@@ -175,8 +138,8 @@ func (l *Ldap) GetAccountName(mp map[string][]string) (r string,
 
 // FullRecord Gets the full record of an user, using its
 //  sAMAccountName field.
-func (l *Ldap) FullRecord(user, pass, usr string) (m map[string][]string,
-	e *errors.Error) {
+func (l *Ldap) FullRecord(user, pass,
+	usr string) (m map[string][]string, e error) {
 	var n *ldap.Entry
 	var filter string
 	var atts []string
@@ -196,17 +159,14 @@ func (l *Ldap) FullRecord(user, pass, usr string) (m map[string][]string,
 
 // SearchOne searchs the first result of applying the filter f
 func (l *Ldap) SearchOne(user, pass, f string,
-	ats []string) (n *ldap.Entry, e *errors.Error) {
+	ats []string) (n *ldap.Entry, e error) {
 	var ns []*ldap.Entry
 	ns, e = l.SearchFilter(user, pass, f, ats)
 	if e == nil {
 		if len(ns) == 1 {
 			n = ns[0]
 		} else {
-			e = &errors.Error{
-				Code: ErrorMoreThanOne,
-				Err:  fmt.Errorf("Result length = %d", len(ns)),
-			}
+			e = fmt.Errorf("Result length = %d", len(ns))
 		}
 	}
 	return
@@ -214,7 +174,7 @@ func (l *Ldap) SearchOne(user, pass, f string,
 
 // SearchFilter searchs all the result passing the filter f
 func (l *Ldap) SearchFilter(user, pass, f string,
-	ats []string) (n []*ldap.Entry, e *errors.Error) {
+	ats []string) (n []*ldap.Entry, e error) {
 	var (
 		scope = ldap.ScopeWholeSubtree
 		deref = ldap.NeverDerefAliases
@@ -229,21 +189,11 @@ func (l *Ldap) SearchFilter(user, pass, f string,
 	c, e = l.newConn(user, pass)
 	var r *ldap.SearchResult
 	if e == nil {
-		var ec error
-		r, ec = c.Search(s)
-		if ec != nil {
-			e = &errors.Error{
-				Code: ErrorSearch,
-				Err:  ec,
-			}
-		}
+		r, e = c.Search(s)
 		c.Close()
 	}
 	if e == nil && len(r.Entries) == 0 {
-		e = &errors.Error{
-			Code: ErrorSearch,
-			Err:  fmt.Errorf("Failed search of %s", f),
-		}
+		e = fmt.Errorf("Failed search of %s", f)
 	} else if e == nil {
 		n = r.Entries
 	}
