@@ -29,6 +29,8 @@ type Ldap struct {
 	addr   string
 	baseDN string
 	suff   string
+	user   string
+	pass   string
 }
 
 // NewLdap creates a new instance of Ldap
@@ -37,6 +39,26 @@ type Ldap struct {
 // bDN: baseDN
 func NewLdap(addr, sf, bDN string) (l *Ldap) {
 	l = &Ldap{addr: addr, baseDN: bDN, suff: sf}
+	return
+}
+
+// NewLdapWithAcc creates a *Ldap instance with a dedicated
+// account for making queries
+func NewLdapWithAcc(addr, sf, bDN, user,
+	pass string) (l *Ldap) {
+	l = &Ldap{
+		addr:   addr,
+		baseDN: bDN,
+		suff:   sf,
+		user:   user,
+		pass:   pass,
+	}
+	return
+}
+
+func (l *Ldap) FullRecordAcc(usr string) (m map[string][]string,
+	e error) {
+	m, e = l.FullRecord(l.user, l.pass, usr)
 	return
 }
 
