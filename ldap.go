@@ -84,6 +84,14 @@ func (l *Ldap) Authenticate(u, p string) (e error) {
 	return
 }
 
+func (l *Ldap) AuthAndNorm(u, p string) (user string, e error) {
+	e = l.Authenticate(u, p)
+	if e == nil {
+		user = myLower(u)
+	}
+	return
+}
+
 // MembershipCNs obtains the current membership of user usr
 func (l *Ldap) MembershipCNs(mp map[string][]string) (m []string,
 	e error) {
