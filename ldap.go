@@ -26,11 +26,11 @@ const (
 // Ldap is the object that handles the connection to an LDAP
 // server
 type Ldap struct {
-	addr   string
-	baseDN string
-	suff   string
-	user   string
-	pass   string
+	Addr   string `json:"addr"`
+	BaseDN string `json:"baseDN"`
+	Suff   string `json:"suff"`
+	User   string `json:"user"`
+	Pass   string `json:"pass"`
 }
 
 // NewLdap creates a new instance of Ldap
@@ -38,7 +38,7 @@ type Ldap struct {
 // sf: User account suffix
 // bDN: baseDN
 func NewLdap(addr, sf, bDN string) (l *Ldap) {
-	l = &Ldap{addr: addr, baseDN: bDN, suff: sf}
+	l = &Ldap{Addr: addr, BaseDN: bDN, Suff: sf}
 	return
 }
 
@@ -47,18 +47,18 @@ func NewLdap(addr, sf, bDN string) (l *Ldap) {
 func NewLdapWithAcc(addr, sf, bDN, user,
 	pass string) (l *Ldap) {
 	l = &Ldap{
-		addr:   addr,
-		baseDN: bDN,
-		suff:   sf,
-		user:   user,
-		pass:   pass,
+		Addr:   addr,
+		BaseDN: bDN,
+		Suff:   sf,
+		User:   user,
+		Pass:   pass,
 	}
 	return
 }
 
 func (l *Ldap) FullRecordAcc(usr string) (m map[string][]string,
 	e error) {
-	m, e = l.FullRecord(l.user, l.pass, usr)
+	m, e = l.FullRecord(l.User, l.Pass, usr)
 	return
 }
 
@@ -67,9 +67,9 @@ func (l *Ldap) FullRecordAcc(usr string) (m map[string][]string,
 func (l *Ldap) newConn(u, p string) (c *ldap.Conn, e error) {
 	var cfg *tls.Config
 	cfg = &tls.Config{InsecureSkipVerify: true}
-	c, e = ldap.DialTLS("tcp", l.addr, cfg)
+	c, e = ldap.DialTLS("tcp", l.Addr, cfg)
 	if e == nil {
-		e = c.Bind(string(u)+l.suff, p)
+		e = c.Bind(string(u)+l.Suff, p)
 	}
 	return
 }
@@ -213,7 +213,7 @@ func (l *Ldap) SearchFilter(user, pass, f string,
 		tpeol = false        //TypesOnly
 		conts []ldap.Control //[]Control
 	)
-	s := ldap.NewSearchRequest(l.baseDN, scope, deref,
+	s := ldap.NewSearchRequest(l.BaseDN, scope, deref,
 		sizel, timel, tpeol, f, ats, conts)
 	var c *ldap.Conn
 	c, e = l.newConn(user, pass)
